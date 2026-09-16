@@ -1,4 +1,4 @@
-# pycrestron-nvx
+# crestron-nvx
 
 [![CI](https://github.com/Danw33/py-crestron-nvx/actions/workflows/ci.yml/badge.svg)](https://github.com/Danw33/py-crestron-nvx/actions/workflows/ci.yml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -58,7 +58,7 @@ best-effort.
 The package will be installable after its first PyPI release:
 
 ```console
-python -m pip install pycrestron-nvx
+python -m pip install crestron-nvx
 ```
 
 For development before that release:

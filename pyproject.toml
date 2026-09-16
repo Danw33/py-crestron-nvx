@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pycrestron-nvx"
+name = "crestron-nvx"
 version = "0.1.0"
 description = "Unofficial async Python client for Crestron DM NVX devices"
 readme = "README.md"

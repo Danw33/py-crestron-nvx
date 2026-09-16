@@ -1,1 +1,1 @@
-"""Tests for pycrestron-nvx."""
+"""Tests for crestron-nvx."""
