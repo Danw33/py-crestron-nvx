@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible library problem without sharing device secrets
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach credentials, cookies, raw responses, or packet captures.
+  - type: input
+    id: version
+    attributes:
+      label: Library version
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device model and firmware
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Explain the expected and actual behaviour using redacted data.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true

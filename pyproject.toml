@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycrestron-nvx"
+version = "0.1.0"
+description = "Unofficial async Python client for Crestron DM NVX devices"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Dan Wilson"}]
+keywords = ["crestron", "dm-nvx", "av-over-ip", "asyncio"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = [
+  "aiohttp>=3.9.0",
+  "yarl>=1.9.4",
+]
+
+[project.optional-dependencies]
+test = [
+  "build>=1.2.2",
+  "mypy>=1.15.0",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.25.0",
+  "pytest-cov>=6.0.0",
+  "ruff>=0.9.0",
+  "twine>=6.1.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/Danw33/py-crestron-nvx#readme"
+Issues = "https://github.com/Danw33/py-crestron-nvx/issues"
+Source = "https://github.com/Danw33/py-crestron-nvx"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+crestron_nvx = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--strict-markers --strict-config"
+
+[tool.coverage.run]
+branch = true
+source = ["crestron_nvx"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "C4", "E4", "E7", "E9", "F", "I", "PIE", "RUF", "SIM", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+files = ["src/crestron_nvx"]
