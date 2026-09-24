@@ -1,5 +1,6 @@
 """Async, read-only client for the publicly documented DM NVX HTTPS API."""
 
+import asyncio
 import json
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
@@ -11,6 +12,7 @@ from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from yarl import URL
 
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
+from .preview import NvxPreviewImage, NvxPreviewInfo, jpeg_dimensions, parse_preview
 
 _LOGIN_PATH: Final = "/userlogin.html"
 _DEVICE_INFO_PATH: Final = "/Device/DeviceInfo"
@@ -49,6 +51,10 @@ class NvxResponseError(NvxApiError):
     """The endpoint returned an unexpected response."""
 
 
+class NvxPreviewUnavailable(NvxApiError):
+    """Preview is unsupported, disabled or has no current image."""
+
+
 class NvxClient:
     """Read-only client with a cookie store isolated per endpoint."""
 
@@ -69,6 +75,7 @@ class NvxClient:
         self._password = password
         self._verify_ssl = verify_ssl
         self._cookies: dict[str, str] = {}
+        self._io_lock = asyncio.Lock()
 
     @property
     def configuration_url(self) -> str:
@@ -77,6 +84,11 @@ class NvxClient:
         return str(self._base_url)
 
     async def async_get_snapshot(self) -> NvxSnapshot:
+        """Serialize status reads with preview reads and session renewal."""
+        async with self._io_lock:
+            return await self._async_get_snapshot()
+
+    async def _async_get_snapshot(self) -> NvxSnapshot:
         """Authenticate if needed and return one endpoint snapshot."""
 
         if not self._cookies:
@@ -101,6 +113,11 @@ class NvxClient:
         )
 
     async def async_get_read_only_object(self, path: NvxReadPath) -> dict[str, Any]:
+        """Serialize an allow-listed object read."""
+        async with self._io_lock:
+            return await self._async_get_read_only_object(path)
+
+    async def _async_get_read_only_object(self, path: NvxReadPath) -> dict[str, Any]:
         """Read one allow-listed documented object, retrying authentication once."""
 
         if not self._cookies:
@@ -111,6 +128,67 @@ class NvxClient:
             self._cookies.clear()
             await self._async_login()
             return await self._async_get_json(path)
+
+    async def async_get_preview_info(self) -> NvxPreviewInfo:
+        """Serialize capability discovery with other endpoint requests."""
+        async with self._io_lock:
+            return await self._async_get_preview_info()
+
+    async def _async_get_preview_info(self) -> NvxPreviewInfo:
+        """Discover optional preview support without downloading a frame."""
+        try:
+            payload = await self._async_get_read_only_object(NvxReadPath.PREVIEW)
+        except NvxResponseError:
+            return NvxPreviewInfo()
+        return parse_preview(payload, self._base_url)
+
+    async def async_get_preview(self) -> NvxPreviewImage:
+        """Serialize an image read with other endpoint requests."""
+        async with self._io_lock:
+            return await self._async_get_preview()
+
+    async def _async_get_preview(self) -> NvxPreviewImage:
+        """Fetch one current JPEG with a bounded body and one authentication retry."""
+        info = await self._async_get_preview_info()
+        if not info.path:
+            raise NvxPreviewUnavailable("No local preview is available")
+        try:
+            return await self._async_get_preview_image(info.path)
+        except NvxAuthenticationError:
+            self._cookies.clear()
+            await self._async_login()
+            return await self._async_get_preview_image(info.path)
+
+    async def _async_get_preview_image(self, path: str) -> NvxPreviewImage:
+        """Fetch only a validated path; never follow an image redirect."""
+        try:
+            async with self._session.get(
+                self._base_url.with_path(path),
+                cookies=self._cookies,
+                headers={"Referer": str(self._base_url), "Accept": "image/jpeg"},
+                allow_redirects=False,
+                ssl=self._verify_ssl,
+                timeout=_REQUEST_TIMEOUT,
+            ) as response:
+                self._update_cookies(response)
+                if response.status in {401, 403}:
+                    raise NvxAuthenticationError("Preview session expired")
+                if response.status in {404, 410, 204}:
+                    raise NvxPreviewUnavailable("Preview image is unavailable")
+                if response.status != 200 or response.content_type != "image/jpeg":
+                    raise NvxResponseError("Invalid preview response")
+                content = bytearray()
+                while chunk := await response.content.read(_READ_CHUNK_BYTES):
+                    content.extend(chunk)
+                    if len(content) > _MAX_JSON_RESPONSE_BYTES:
+                        raise NvxResponseError("Preview exceeds size limit")
+                data = bytes(content)
+                width, height = jpeg_dimensions(data)
+                return NvxPreviewImage(data, width, height)
+        except (ClientError, TimeoutError) as err:
+            raise NvxConnectionError("Unable to fetch preview") from err
+        except ValueError as err:
+            raise NvxResponseError("Invalid JPEG preview") from err
 
     async def _async_login(self) -> None:
         """Establish an authenticated session without writing device state."""

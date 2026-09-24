@@ -5,6 +5,26 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- Accept case-insensitive local preview hosting values observed on firmware 7.1.
+- Prefer available images by descending pixel area, retaining path validation
+  and download limits; unknown dimensions sort last with stable tie ordering.
+
+- Typed optional preview capability and authenticated JPEG retrieval.
+- Same-origin paths, redirect rejection, bounded image size/dimensions.
+- Serialized operations, one authentication retry, and preview regression tests.
+- Firmware 1.3707.00028 DM-NVX-350 API-shape evidence; HA validation pending.
+- DM-NVX-360 firmware 7.1 preview display and updates validated through HA,
+  including Media and remote iOS viewing; other hardware checks remain pending.
+
+### Changed
+
+- Update installation wording following the first PyPI release and correct a
+  formatting error in the API provenance statement.
+
 ## [0.1.0] - 2026-09-13
 
 ### Added

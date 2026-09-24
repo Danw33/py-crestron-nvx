@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/Danw33/py-crestron-nvx/actions/workflows/ci.yml/badge.svg)](https://github.com/Danw33/py-crestron-nvx/actions/workflows/ci.yml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDanw33%2Fpy-crestron-nvx%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
+[![PyPI Version](https://img.shields.io/pypi/v/crestron-nvx)](https://pypi.org/project/crestron-nvx)
 
 An **unofficial** async Python client for direct local communication with
 Crestron DM NVX AV-over-IP endpoints.
@@ -16,7 +18,7 @@ Crestron DM NVX AV-over-IP endpoints.
 
 ## API provenance
 
-This library implements Crestron's ** publicly documented DM NVX REST API**. 
+This library implements Crestron's **publicly documented DM NVX REST API**.
 The authoritative external references are Crestron's public:
 
 - [DM NVX REST API reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/API-Reference.htm)
@@ -33,10 +35,23 @@ fixture policy.
 
 ## Status
 
-Version 0.1 is deliberately read-only. It authenticates over HTTPS and reads
+Version 0.2 remains deliberately read-only. It authenticates over HTTPS and reads
 device identity, device-specific state, A/V I/O status, receive streams, and
 transmit streams. An allow-listed read method also supports safe exploration
 of documented objects such as Preview.
+
+`await client.async_get_preview_info()` detects optional preview capability.
+`await client.async_get_preview()` returns `NvxPreviewImage` (JPEG bytes and
+dimensions), or raises `NvxPreviewUnavailable` when no local image is available.
+Other failures use existing typed API exceptions. Unsupported/string-valued
+objects are normal on old firmware. No firmware cutoff is assumed.
+
+Only same-origin JPEG paths without redirects are accepted. Responses are
+limited to 2 MiB and bounded dimensions, with one authentication retry. Client
+operations are serialized to protect the session. Images are not persisted or
+logged. Preview display and updates have been validated through Home Assistant
+on a firmware 7.1 DM-NVX-360, including remote iOS viewing. Other models and
+physical outage/restart recovery remain to be validated.
 
 No reboot, routing, input, mode, stream, or configuration write can be issued
 by this release.
@@ -53,15 +68,19 @@ The parser detects capabilities from returned objects and fields. It does not
 reject other firmware versions, but versions outside this table are currently
 best-effort.
 
+A DM-NVX-350 on `1.3707.00028` also passed authentication and API-shape probing;
+its string-valued Preview response is treated as unsupported. HA and lifecycle
+testing on this firmware remain pending.
+
 ## Installation
 
-The package will be installable after its first PyPI release:
+Install the package from PyPI:
 
 ```console
 python -m pip install crestron-nvx
 ```
 
-For development before that release:
+For development:
 
 ```console
 python -m pip install --editable '.[test]'

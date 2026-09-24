@@ -5,10 +5,12 @@ from .client import (
     NvxAuthenticationError,
     NvxClient,
     NvxConnectionError,
+    NvxPreviewUnavailable,
     NvxReadPath,
     NvxResponseError,
 )
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
+from .preview import NvxPreviewImage, NvxPreviewInfo
 
 __all__ = [
     "NvxApiError",
@@ -17,6 +19,9 @@ __all__ = [
     "NvxClient",
     "NvxConnectionError",
     "NvxDeviceInfo",
+    "NvxPreviewImage",
+    "NvxPreviewInfo",
+    "NvxPreviewUnavailable",
     "NvxReadPath",
     "NvxResponseError",
     "NvxSnapshot",
