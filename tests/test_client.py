@@ -161,15 +161,16 @@ def test_parse_complete_snapshot() -> None:
     assert snapshot.front_panel_lockout_enabled is False
     assert snapshot.leds_enabled is True
     assert snapshot.show_setup_information_on_osd is False
-    assert snapshot.av_ports[0].port_id == "input-id"
+    assert snapshot.av_ports[0].port_id == "input_index0_hdmi_0"
     assert snapshot.av_ports[0].name == "HDMI 1"
     assert snapshot.av_ports[0].resolution == "1920x1080@60"
-    assert snapshot.av_ports[1].port_id == "output_0_0"
+    assert snapshot.av_ports[1].port_id == "output_index0_hdmi_0"
     assert snapshot.av_ports[1].sink_connected is True
     assert snapshot.av_ports[1].transmitting is True
     assert snapshot.receive_streams[0].stream_id == "receive_0"
     assert snapshot.transmit_streams[0].stream_id == "tx-id"
-    assert snapshot.transmit_streams[0].bitrate_mbps == 750
+    assert snapshot.transmit_streams[0].bitrate_mbps is None
+    assert snapshot.transmit_streams[0].active_bitrate_mbps == 750
     assert snapshot.transmit_streams[0].resolution == "1920x1080@60"
     assert snapshot.raw_device_specific["FutureField"] == 1
 
@@ -358,7 +359,8 @@ def test_parse_e30_firmware_6_shape() -> None:
     assert snapshot.av_ports[1].sink_connected is True
     assert snapshot.av_ports[1].transmitting is True
     assert snapshot.receive_streams[0].codec_ready is False
-    assert snapshot.transmit_streams[0].bitrate_mbps == 750
+    assert snapshot.transmit_streams[0].bitrate_mbps is None
+    assert snapshot.transmit_streams[0].active_bitrate_mbps == 750
     assert snapshot.transmit_streams[0].resolution == "3840x2160@60"
 
 

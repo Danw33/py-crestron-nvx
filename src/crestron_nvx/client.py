@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import re
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from http.cookies import SimpleCookie
@@ -410,17 +412,51 @@ def _parse_av_ports(payload: Mapping[str, Any]) -> tuple[NvxAvPort, ...]:
     root = _nested_mapping(payload, "Device", "AudioVideoInputOutput")
     ports: list[NvxAvPort] = []
     for direction, collection_name in (("input", "Inputs"), ("output", "Outputs")):
-        for group_index, group in enumerate(
-            _object_collection(root.get(collection_name))
-        ):
+        groups = _object_collection(root.get(collection_name))
+        # input0/output0 are physical slot designators, not HDMI display names.
+        # Older shapes without a slot designator retain positional identity.
+        slots = [
+            match[1]
+            if (
+                match := re.fullmatch(
+                    rf"{direction}(\d+)", str(group.get("Name", "")).lower()
+                )
+            )
+            else None
+            for group in groups
+        ]
+        slot_counts = Counter(slots)
+        for group_index, group in enumerate(groups):
             group_name = _optional_string(group.get("Name"))
+            slot = slots[group_index]
+            group_key = (
+                f"slot{slot}"
+                if slot is not None and slot_counts[slot] == 1
+                else f"index{group_index}"
+            )
+            type_counts: Counter[str] = Counter()
             for port_index, port in enumerate(_object_collection(group.get("Ports"))):
                 hdmi = port.get("Hdmi")
                 if not isinstance(hdmi, Mapping):
                     hdmi = {}
-                port_id = _optional_string(port.get("Uuid")) or (
-                    f"{direction}_{group_index}_{port_index}"
-                )
+                port_type = str(port.get("PortType", "")).lower()
+                if not port_type and hdmi:
+                    port_type = "hdmi"
+                if port_type in {
+                    "hdmi",
+                    "analog",
+                    "audio",
+                    "vga",
+                    "bnc",
+                    "displayport",
+                }:
+                    port_key = f"{port_type}_{type_counts[port_type]}"
+                    type_counts[port_type] += 1
+                else:
+                    port_key = f"port{port_index}"
+                # Firmware 7.1 can regenerate both group and port Uuids on
+                # every GET. Never use them as persistent physical identity.
+                port_id = f"{direction}_{group_key}_{port_key}"
                 port_name = (
                     _optional_string(hdmi.get("Name"))
                     or group_name
@@ -459,18 +495,18 @@ def _parse_streams(payload: Mapping[str, Any], direction: str) -> tuple[NvxStrea
             or _optional_string(stream.get("Uuid"))
             or f"{direction}_{index}"
         )
-        bitrate = _optional_int(stream.get("Bitrate"))
-        if direction == "transmit":
-            active_bitrate = _optional_int(stream.get("ActiveBitrate"))
-            if active_bitrate is not None:
-                bitrate = active_bitrate
         streams.append(
             NvxStream(
                 stream_id=stream_id,
                 direction=direction,
                 status=_optional_string(stream.get("Status")),
                 codec_ready=_optional_bool(stream.get("CodecReady")),
-                bitrate_mbps=bitrate,
+                bitrate_mbps=_optional_int(stream.get("Bitrate")),
+                active_bitrate_mbps=(
+                    _optional_int(stream.get("ActiveBitrate"))
+                    if direction == "transmit"
+                    else None
+                ),
                 horizontal_resolution=_optional_int(stream.get("HorizontalResolution")),
                 vertical_resolution=_optional_int(stream.get("VerticalResolution")),
                 frames_per_second=_optional_int(stream.get("FramesPerSecond")),

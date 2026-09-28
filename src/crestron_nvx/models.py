@@ -20,7 +20,7 @@ class NvxDeviceInfo:
 
 @dataclass(frozen=True, slots=True)
 class NvxAvPort:
-    """Read-only status for one physical A/V port."""
+    """Physical A/V port status, keyed by topology rather than transient UUID."""
 
     port_id: str
     name: str
@@ -53,10 +53,13 @@ class NvxStream:
     direction: str
     status: str | None = None
     codec_ready: bool | None = None
-    bitrate_mbps: int | None = None
+    bitrate_mbps: int | None = None  # Raw Bitrate; not an active-rate fallback.
     horizontal_resolution: int | None = None
     vertical_resolution: int | None = None
     frames_per_second: int | None = None
+    # Bitrate is the raw reported field; ActiveBitrate is a separate measurement.
+    # Absence must not be replaced with Bitrate or inferred from stream status.
+    active_bitrate_mbps: int | None = None
 
     @property
     def resolution(self) -> str | None:

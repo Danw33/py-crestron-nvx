@@ -5,6 +5,22 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Fixed
+
+- Use physical slot/type keys for A/V ports instead of UUIDs that firmware 7.1
+  regenerates on every response. Standard input/output slot designators survive
+  group reordering and HDMI display-name changes.
+
+### Changed
+
+- `NvxStream.bitrate_mbps` now contains only the reported `Bitrate` value.
+  Consumers needing the active transmit measurement must use the new optional
+  `active_bitrate_mbps` field. Missing active readings remain `None`.
+- Port IDs change from API UUIDs to physical keys. Consumers that persist these
+  IDs need a migration; see `docs/TELEMETRY.md` for identity limitations.
+
 ## [0.2.0]
 
 ### Added
