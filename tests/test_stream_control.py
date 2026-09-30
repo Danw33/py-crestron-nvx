@@ -39,7 +39,7 @@ def snapshot(direction="receive", status="Stream stopped", **stream_changes):
     [
         ("DM-NVX-350", "Receiver", "receive", True),
         ("DM-NVX-360", "Receiver", "receive", True),
-        ("DM-NVX-E30", "Receiver", "receive", False),
+        ("DM-NVX-D30", "Receiver", "receive", True),
         ("DM-NVX-350", "Transmitter", "transmit", True),
         ("DM-NVX-360", "Transmitter", "transmit", True),
         ("DM-NVX-E30", "Transmitter", "transmit", True),

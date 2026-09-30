@@ -5,6 +5,17 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Centralise observed control support in the immutable `NvxCapabilities` view,
+  available through `snapshot.capabilities` without additional requests.
+  Existing snapshot accessors remain compatible and use the same rules.
+- Replace exact-model control allowlists with DM NVX family recognition and
+  reported mode, topology and fields, allowing D30, 351, 352, 363 and unfamiliar
+  DM NVX models to participate without claiming new hardware validation.
+- Reject ambiguous primary stream slots and unmapped configured video sources;
+  retain all identity, busy-state, automatic-routing and no-replay protections.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

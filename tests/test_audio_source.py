@@ -48,10 +48,15 @@ BASE = replace(
             "DM-NVX-360",
             "Receiver",
             "Insert",
-            ("AudioFollowsVideo", "Input1", "AnalogAudio", "PrimaryStreamAudio"),
+            (
+                "AudioFollowsVideo",
+                "Input1",
+                "Input2",
+                "AnalogAudio",
+                "PrimaryStreamAudio",
+            ),
         ),
-        ("DM-NVX-E30", "Transmitter", None, ("AudioFollowsVideo", "Input1")),
-        ("DM-NVX-E30", "Receiver", None, ()),
+        ("DM-NVX-E30", "Transmitter", None, ("AudioFollowsVideo", "Input1", "Input2")),
         ("Other", "Transmitter", "Insert", ()),
     ],
 )

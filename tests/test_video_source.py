@@ -31,14 +31,14 @@ BASE = replace(
     [
         ("DM-NVX-350", "Transmitter", ("None", "Input1", "Input2")),
         ("DM-NVX-350", "Receiver", ("None", "Input1", "Input2", "Stream")),
-        ("DM-NVX-360", "Receiver", ("None", "Input1", "Stream")),
-        ("DM-NVX-E30", "Transmitter", ("None", "Input1")),
-        ("DM-NVX-E30", "Receiver", ()),
+        ("DM-NVX-360", "Receiver", ("None", "Input1", "Input2", "Stream")),
+        ("DM-NVX-E30", "Transmitter", ("None", "Input1", "Input2")),
         ("Other", "Receiver", ()),
         ("DM-NVX-350", "Unknown", ()),
     ],
 )
 def test_options(model, mode, expected):
+    # Deliberately identical topology: the model must not override observations.
     snapshot = replace(BASE, device=replace(BASE.device, model=model), device_mode=mode)
     assert snapshot.video_source_options == expected
 

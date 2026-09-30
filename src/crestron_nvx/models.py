@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from .capabilities import NvxCapabilities
+
 
 @dataclass(frozen=True, slots=True)
 class NvxDeviceInfo:
@@ -102,115 +104,30 @@ class NvxSnapshot:
     transmit_streams: tuple[NvxStream, ...] = ()
     raw_device_specific: dict[str, Any] = field(default_factory=dict)
 
-    def primary_control_stream(self, direction: str) -> NvxStream | None:
-        """Return an observed primary stream only in the matching device mode.
+    @property
+    def capabilities(self) -> NvxCapabilities:
+        """Derive supported operations without I/O or a separate mutable cache."""
+        return NvxCapabilities.from_snapshot(self)
 
-        The inactive direction can expose stale/mirrored firmware data, so it
-        must never be used to enable a control. Dictionary slots are not guessed.
-        """
+    def primary_control_stream(self, direction: str) -> NvxStream | None:
+        """Compatibility accessor for the matching active-direction stream."""
         if direction == "receive":
-            models = {"DM-NVX-350", "DM-NVX-360"}
-            mode = "Receiver"
-            streams = self.receive_streams
-        elif direction == "transmit":
-            models = {"DM-NVX-350", "DM-NVX-360", "DM-NVX-E30"}
-            mode = "Transmitter"
-            streams = self.transmit_streams
-        else:
-            return None
-        if self.device.model.upper() not in models or self.device_mode != mode:
-            return None
-        return next(
-            (
-                stream
-                for stream in streams
-                if stream.slot_index == 0
-                and stream.direction == direction
-                and stream.processing is not None
-                and stream.status is not None
-            ),
-            None,
-        )
+            return self.capabilities.receive_control_stream
+        if direction == "transmit":
+            return self.capabilities.transmit_control_stream
+        return None
 
     @property
     def primary_receive_stream(self) -> NvxStream | None:
-        """Return an explicitly addressable primary slot on supported receivers."""
-        if (
-            self.device.model.upper() not in {"DM-NVX-350", "DM-NVX-360"}
-            or self.device_mode != "Receiver"
-        ):
-            return None
-        return next(
-            (
-                stream
-                for stream in self.receive_streams
-                if stream.slot_index == 0 and stream.stream_location is not None
-            ),
-            None,
-        )
+        """Compatibility accessor for an addressable receiver routing slot."""
+        return self.capabilities.receive_routing_stream
 
     @property
     def video_source_options(self) -> tuple[str, ...]:
-        """Conservative choices for known hardware with observed HDMI topology."""
-        limits = {"DM-NVX-350": 2, "DM-NVX-360": 1, "DM-NVX-E30": 1}
-        limit = limits.get(self.device.model.upper())
-        if (
-            limit is None
-            or self.video_source not in {"None", "Input1", "Input2", "Stream"}
-            or self.device_mode not in {"Transmitter", "Receiver"}
-            or (
-                self.device.model.upper() == "DM-NVX-E30"
-                and self.device_mode != "Transmitter"
-            )
-        ):
-            return ()
-        choices = ["None"]
-        for index in range(limit):
-            if any(
-                port.direction == "input"
-                and port.port_id == f"input_slot{index}_hdmi_0"
-                for port in self.av_ports
-            ):
-                choices.append(f"Input{index + 1}")
-        if self.device_mode == "Receiver":
-            choices.append("Stream")
-        return tuple(choices)
+        """Compatibility accessor for documented, observed video choices."""
+        return self.capabilities.video_source_options
 
     @property
     def audio_source_options(self) -> tuple[str, ...]:
-        """Offer documented primary audio sources for known endpoint topology."""
-        limits = {"DM-NVX-350": 2, "DM-NVX-360": 1, "DM-NVX-E30": 1}
-        model = self.device.model.upper()
-        limit = limits.get(model)
-        if (
-            limit is None
-            or self.audio_source
-            not in {
-                "AudioFollowsVideo",
-                "Input1",
-                "Input2",
-                "AnalogAudio",
-                "PrimaryStreamAudio",
-                "SecondaryStreamAudio",
-            }
-            or self.device_mode not in {"Transmitter", "Receiver"}
-            or (model == "DM-NVX-E30" and self.device_mode != "Transmitter")
-        ):
-            return ()
-        choices = ["AudioFollowsVideo"]
-        for index in range(limit):
-            if any(
-                port.direction == "input"
-                and port.port_id == f"input_slot{index}_hdmi_0"
-                for port in self.av_ports
-            ):
-                choices.append(f"Input{index + 1}")
-        if model != "DM-NVX-E30" and self.audio_mode == "Insert":
-            choices.append("AnalogAudio")
-        if (
-            model != "DM-NVX-E30"
-            and self.device_mode == "Receiver"
-            and self.receive_streams
-        ):
-            choices.append("PrimaryStreamAudio")
-        return tuple(choices) if self.audio_source in choices else ()
+        """Compatibility accessor for documented, observed audio choices."""
+        return self.capabilities.audio_source_options

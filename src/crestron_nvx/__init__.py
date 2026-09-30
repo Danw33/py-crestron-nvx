@@ -1,5 +1,6 @@
 """Unofficial async client for the publicly documented DM NVX REST API."""
 
+from .capabilities import NvxCapabilities, is_nvx_model
 from .client import (
     NvxApiError,
     NvxAuthenticationError,
@@ -20,6 +21,7 @@ __all__ = [
     "NvxApiError",
     "NvxAuthenticationError",
     "NvxAvPort",
+    "NvxCapabilities",
     "NvxClient",
     "NvxConnectionError",
     "NvxControlError",
@@ -33,5 +35,6 @@ __all__ = [
     "NvxResponseError",
     "NvxSnapshot",
     "NvxStream",
+    "is_nvx_model",
     "is_valid_stream_location",
 ]

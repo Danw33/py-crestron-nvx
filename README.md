@@ -41,6 +41,33 @@ device identity, device-specific state, A/V I/O status, receive streams, and
 transmit streams. An allow-listed read method also supports safe exploration
 of documented objects such as Stream Preview Images.
 
+### Capability-driven compatibility (unreleased)
+
+`snapshot.capabilities` exposes an immutable `NvxCapabilities` view derived
+from the already-fetched snapshot, with no extra network requests or mutable
+capability cache. It centralises source choices, primary stream addressing,
+LED support and the documented family-wide reboot operation. Existing snapshot
+accessors remain available and delegate to this view.
+
+DM NVX endpoints are recognised by product-family naming, not an exact-model
+allowlist. D30, 351, 352, 363 and unfamiliar DM NVX models can use operations
+whose required mode, topology and fields are observed. This is best-effort API
+compatibility, not a claim of hardware validation for those models. A
+receiver-only device without local inputs receives no invented input choices.
+Unknown source values and ambiguous stream addressing fail closed.
+
+Capabilities describe support, not current readiness, credentials or guaranteed
+write permission. The client still performs fresh identity, automatic-routing,
+busy-state, acknowledgement and readback checks. Readable properties do not
+automatically become controls: physical control lock remains read-only.
+Preview support continues to use the separately fetched `NvxPreviewInfo`.
+
+The [DeviceSpecific API](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm)
+defines the supported write vocabulary. The API's
+[DeviceCapabilities object](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceCapabilities.htm)
+is not a complete writable-feature schema; the library does not treat it as one.
+Future controls should extend this shared view with their own documented evidence.
+
 ### Explicit LED control
 
 `await client.async_set_leds_enabled(True, expected_device_id=device_id)` returns
@@ -60,11 +87,12 @@ is implemented.
 
 ### Explicit video-source selection
 
-`snapshot.video_source_options` returns conservative choices for DM-NVX-350,
-DM-NVX-360 and DM-NVX-E30 using model limits, reported HDMI slots and mode.
-Unknown hardware or missing/unknown source values expose no choices. `None`
-is the literal API string, not Python `None`. `Stream` is offered only in receiver
-mode; E30 never offers it. Ambiguous input topology is not guessed from labels.
+`snapshot.video_source_options` returns documented choices using reported HDMI
+slots and mode, without model-specific input limits. Missing, unknown or
+unmapped configured source values expose no choices. `None` is the literal API
+string, not Python `None`. `Stream` is offered only in receiver mode. Ambiguous
+input topology is not guessed from labels; only documented Input1/Input2
+mappings are currently implemented.
 
 `await client.async_set_video_source("Input1", expected_device_id=device_id)`
 rechecks capabilities and identity before sending only `VideoSource`. It verifies
@@ -81,25 +109,25 @@ Per-device write support still requires supervised hardware validation.
 ### Explicit reboot
 
 `await client.async_reboot(expected_device_id=device_id)` sends one
-`DeviceOperations.Reboot` request after a fresh identity check on a supported
-DM-NVX-350, DM-NVX-360 or DM-NVX-E30. The operation can interrupt video and
-audio until the device returns. A successful acknowledgement confirms only that
+`DeviceOperations.Reboot` request after a fresh identity check on a DM NVX
+endpoint. The operation can interrupt video and audio until the device returns.
+A successful acknowledgement confirms only that
 the request was accepted, not that the restart completed. The connection may
 close before an acknowledgement; that outcome is uncertain. The client does not
 retry, poll for reboot completion, or send `Restore` or `Reset`.
 
 The command is documented in Crestron's public
 [DeviceOperations API](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceOperations.htm).
-Live write validation is pending.
+Reboot has been hardware-tested by the project owner; this does not validate
+every model/firmware combination.
 
 ### Explicit audio-source selection
 
-`snapshot.audio_source_options` provides conservative choices for supported
-models when the configured source is recognized: Audio Follows Video, observed
-HDMI inputs, analog audio in Insert mode on 350/360, and primary stream audio on
-350/360 receivers reporting receive streams. The E30 exposes Audio Follows Video
-and its observed HDMI input. Secondary stream audio and NAX source selection are
-deferred until their device-specific value mapping is validated.
+`snapshot.audio_source_options` provides conservative choices when the
+configured source maps to observed capabilities: Audio Follows Video, observed
+HDMI inputs, analog audio when Insert mode is reported, and primary stream
+audio on receivers reporting receive streams. Secondary stream audio and NAX
+source selection are deferred until their device-specific value mapping is validated.
 
 `await client.async_set_audio_source("Input1", expected_device_id=device_id)`
 posts only `AudioSource` and confirms its configured value. It never changes
@@ -132,7 +160,7 @@ not exposed.
 ### Primary receiver routing
 
 `await client.async_set_receive_stream_location(location, expected_device_id=identity)`
-sets only `StreamReceive.Streams[0].StreamLocation` on a 350/360 in receiver mode.
+sets only `StreamReceive.Streams[0].StreamLocation` on an eligible DM NVX receiver.
 Pass an advertised, credential-free `rtsp://` URL from a trusted transmitter.
 IPv6 literals, URL credentials, queries and fragments are rejected. The client
 does not fetch or resolve the stream URL; the receiver uses it. Stream addresses
@@ -158,8 +186,8 @@ that writes have been validated on every supported firmware.
 
 `await client.async_set_stream_running("receive", True, expected_device_id=identity)`
 sends a primary receive start command; use `False` to stop. `"transmit"` selects
-the transmitter direction. Only the current device mode is eligible: 350/360
-receive or transmit, and E30 transmit. A primary list-backed slot with status
+the transmitter direction. Only the direction matching the reported device
+mode is eligible. A primary list-backed slot with status
 and explicit non-busy `Processing` is required. Reception start also requires
 a valid configured RTSP URL. Transmitter stop can interrupt multiple receivers.
 
@@ -172,13 +200,14 @@ a POST, or write any other property. Acknowledgement without matching status is
 an uncertain outcome, not success; playback itself is not verified. Hardware
 start/stop validation remains pending.
 
-The declared initial support scope is:
+The existing monitoring validation record is:
 
 | Model | Firmware 6.0 | Firmware 7.1 |
 | --- | --- | --- |
 | DM-NVX-350 | Supported; validation pending | Supported; hardware validated |
 | DM-NVX-360 | Supported; validation pending | Supported; hardware validated |
 | DM-NVX-E30 | Supported; hardware validated | Supported; validation pending |
+| DM-NVX-D30 / 351 / 352 / 363 | Capability-based; hardware validation pending | Capability-based; hardware validation pending |
 
 The parser detects capabilities from returned objects and fields. It does not
 reject other firmware versions, but versions outside this table are currently

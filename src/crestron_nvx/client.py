@@ -121,7 +121,7 @@ class NvxClient:
                 raise NvxControlError(
                     "Endpoint identity does not match; no command sent"
                 )
-            if before.leds_enabled is None:
+            if not before.capabilities.leds_control:
                 raise NvxControlUnsupported("LED state is not available")
             if before.leds_enabled is enabled:
                 return before
@@ -371,12 +371,8 @@ class NvxClient:
                 raise NvxControlError(
                     "Endpoint identity does not match; no command sent"
                 )
-            if before.device.model.upper() not in {
-                "DM-NVX-350",
-                "DM-NVX-360",
-                "DM-NVX-E30",
-            }:
-                raise NvxControlUnsupported("Reboot is not enabled for this model")
+            if not before.capabilities.reboot:
+                raise NvxControlUnsupported("Reboot requires a DM NVX endpoint")
             await self._async_post_control(
                 "Reboot", True, object_name="DeviceOperations"
             )

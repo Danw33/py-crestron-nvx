@@ -113,7 +113,7 @@ async def test_exact_primary_partial_payload_and_readback(path):
     "snapshot",
     [
         replace(BASE, device_mode="Transmitter"),
-        replace(BASE, device=replace(BASE.device, model="DM-NVX-E30")),
+        replace(BASE, device=replace(BASE.device, model="OTHER")),
         replace(BASE, receive_streams=()),
         *[
             replace(BASE, receive_streams=(replace(STREAM, **change),))
