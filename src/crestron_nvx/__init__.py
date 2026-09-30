@@ -14,6 +14,7 @@ from .client import (
 )
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
 from .preview import NvxPreviewImage, NvxPreviewInfo
+from .routing import is_valid_stream_location
 
 __all__ = [
     "NvxApiError",
@@ -32,4 +33,5 @@ __all__ = [
     "NvxResponseError",
     "NvxSnapshot",
     "NvxStream",
+    "is_valid_stream_location",
 ]

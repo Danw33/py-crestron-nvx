@@ -7,6 +7,10 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit primary receiver stream routing for DM-NVX-350/360: a validated RTSP
+  URL, fresh identity/mode/busy checks, one partial slot-0 write and verified
+  readback. No credentials, other stream slots, source selections or start/stop
+  settings are changed. Typed stream data now includes routing metadata.
 - Explicit reboot operation using a fixed `DeviceOperations.Reboot` request,
   fresh endpoint identity preflight, relevant acknowledgement checks and no
   automatic retry or readback during the expected disconnect.

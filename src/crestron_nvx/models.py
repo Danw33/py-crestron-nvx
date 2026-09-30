@@ -60,6 +60,11 @@ class NvxStream:
     # Bitrate is the raw reported field; ActiveBitrate is a separate measurement.
     # Absence must not be replaced with Bitrate or inferred from stream status.
     active_bitrate_mbps: int | None = None
+    # Only list-backed slots are addressable; never infer an index from a UUID.
+    slot_index: int | None = None
+    stream_location: str | None = field(default=None, repr=False)
+    processing: bool | None = None
+    session_initiation: str | None = None
 
     @property
     def resolution(self) -> str | None:
@@ -96,6 +101,23 @@ class NvxSnapshot:
     receive_streams: tuple[NvxStream, ...] = ()
     transmit_streams: tuple[NvxStream, ...] = ()
     raw_device_specific: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def primary_receive_stream(self) -> NvxStream | None:
+        """Return an explicitly addressable primary slot on supported receivers."""
+        if (
+            self.device.model.upper() not in {"DM-NVX-350", "DM-NVX-360"}
+            or self.device_mode != "Receiver"
+        ):
+            return None
+        return next(
+            (
+                stream
+                for stream in self.receive_streams
+                if stream.slot_index == 0 and stream.stream_location is not None
+            ),
+            None,
+        )
 
     @property
     def video_source_options(self) -> tuple[str, ...]:

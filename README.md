@@ -124,8 +124,33 @@ logged. Preview display and updates have been validated through Home Assistant
 on a firmware 7.1 DM-NVX-360, including remote iOS viewing. Other models and
 physical outage/restart recovery remain to be validated.
 
-Published 0.3.0 remains read-only. Development writes are limited to LEDs and
-configured video source; network-stream routing and mode writes are not exposed.
+Published 0.3.0 remains read-only. Development writes include LEDs, video/audio
+source selection, explicit reboot and primary receiver stream URL routing.
+Device mode and stream start/stop writes are not exposed.
+
+### Primary receiver routing (unreleased)
+
+`await client.async_set_receive_stream_location(location, expected_device_id=identity)`
+sets only `StreamReceive.Streams[0].StreamLocation` on a 350/360 in receiver mode.
+Pass an advertised, credential-free `rtsp://` URL from a trusted transmitter.
+IPv6 literals, URL credentials, queries and fragments are rejected. The client
+does not fetch or resolve the stream URL; the receiver uses it. Stream addresses
+are private network data: do not log or publish them. They are excluded from
+the stream model's repr, but remain present in dataclass serialization.
+
+The operation checks fresh receiver identity and an addressable list-backed
+primary slot. A changed URL requires `Processing` false and `SessionInitiation`
+`Multicast via RTSP`. One partial POST is followed by bounded configured-state
+readback; this is not a guarantee of stream playback. No start/stop, source,
+credentials, automatic routing or secondary-slot settings are written. Empty
+objects and placeholder slots are never sent. No command is automatically
+replayed. After an uncertain failure, inspect the receiver before retrying.
+
+Public references: [StreamReceive](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/StreamReceive.htm),
+[StreamTransmit](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/StreamTransmit.htm),
+and [partial POST semantics](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Making-API-Calls.htm).
+Hardware routing validation is pending; monitoring compatibility does not imply
+that writes have been validated on every supported firmware.
 
 The declared initial support scope is:
 

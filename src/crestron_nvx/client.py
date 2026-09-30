@@ -15,6 +15,7 @@ from yarl import URL
 
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
 from .preview import NvxPreviewImage, NvxPreviewInfo, jpeg_dimensions, parse_preview
+from .routing import is_valid_stream_location
 
 _LOGIN_PATH: Final = "/userlogin.html"
 _DEVICE_INFO_PATH: Final = "/Device/DeviceInfo"
@@ -236,6 +237,55 @@ class NvxClient:
                 "Audio source change could not be verified; outcome uncertain"
             )
 
+    async def async_set_receive_stream_location(
+        self, location: str, *, expected_device_id: str | None = None
+    ) -> NvxSnapshot:
+        """Set only primary receive slot 0's URL; never start/stop or change sources."""
+        if not is_valid_stream_location(location):
+            raise ValueError("Invalid stream location")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            stream = before.primary_receive_stream
+            if stream is None:
+                raise NvxControlUnsupported("Primary receiver routing is unavailable")
+            if stream.stream_location == location:
+                return before
+            if (
+                stream.processing is not False
+                or stream.session_initiation != "Multicast via RTSP"
+            ):
+                raise NvxControlUnsupported(
+                    "Receiver is busy or not configured for multicast via RTSP"
+                )
+            await self._async_post_control(
+                "StreamLocation", location, object_name="StreamReceive"
+            )
+            for attempt in range(3):
+                if attempt:
+                    await asyncio.sleep(0.25)
+                after = await self._async_get_snapshot()
+                if after.device.device_id != before.device.device_id:
+                    raise NvxControlError(
+                        "Endpoint identity changed during verification"
+                    )
+                updated = after.primary_receive_stream
+                if updated is not None and updated.stream_location == location:
+                    return after
+            raise NvxControlError(
+                "Stream route change could not be verified; outcome uncertain"
+            )
+
     async def async_reboot(self, *, expected_device_id: str | None = None) -> None:
         """Send one explicit reboot request after a fresh device identity check.
 
@@ -267,16 +317,23 @@ class NvxClient:
 
     async def _async_post_control(
         self,
-        property_name: Literal["LedsEnabled", "VideoSource", "AudioSource", "Reboot"],
+        property_name: Literal[
+            "LedsEnabled", "VideoSource", "AudioSource", "Reboot", "StreamLocation"
+        ],
         value: bool | str,
         *,
-        object_name: Literal["DeviceSpecific", "DeviceOperations"] = "DeviceSpecific",
+        object_name: Literal[
+            "DeviceSpecific", "DeviceOperations", "StreamReceive"
+        ] = "DeviceSpecific",
     ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
+        partial: dict[str, Any] = {property_name: value}
+        if object_name == "StreamReceive":
+            partial = {"Streams": [partial]}
         try:
             async with self._session.post(
                 self._base_url.with_path("/Device"),
-                json={"Device": {object_name: {property_name: value}}},
+                json={"Device": {object_name: partial}},
                 cookies=self._cookies,
                 headers={"Referer": str(self._base_url), "Origin": str(self._base_url)},
                 allow_redirects=False,
@@ -591,6 +648,13 @@ def _validate_control_result(
                 path == f"{object_path}.{property_name}"
                 and prop in (None, property_name)
             )
+            if object_name == "StreamReceive" and isinstance(path, str):
+                matches |= path in {
+                    "Device.StreamReceive.Streams.0",
+                    "Device.StreamReceive.Streams.0.StreamLocation",
+                    "Device.StreamReceive.Streams[0]",
+                    "Device.StreamReceive.Streams[0].StreamLocation",
+                } and prop in (None, property_name)
             if type(status) is not int or status != 0:
                 if matches and type(status) is int and status in {-2, 3}:
                     raise NvxControlUnsupported("Control is read-only or unsupported")
@@ -761,6 +825,19 @@ def _parse_streams(payload: Mapping[str, Any], direction: str) -> tuple[NvxStrea
             NvxStream(
                 stream_id=stream_id,
                 direction=direction,
+                slot_index=(
+                    index
+                    if isinstance(root.get("Streams"), list)
+                    and all(isinstance(item, Mapping) for item in root["Streams"])
+                    else None
+                ),
+                stream_location=(
+                    stream.get("StreamLocation")
+                    if isinstance(stream.get("StreamLocation"), str)
+                    else None
+                ),
+                processing=_optional_bool(stream.get("Processing")),
+                session_initiation=_optional_string(stream.get("SessionInitiation")),
                 status=_optional_string(stream.get("Status")),
                 codec_ready=_optional_bool(stream.get("CodecReady")),
                 bitrate_mbps=_optional_int(stream.get("Bitrate")),
