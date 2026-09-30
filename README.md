@@ -78,6 +78,25 @@ Changing video can interrupt viewing and affect audio that follows video.
 Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
 Per-device write support still requires supervised hardware validation.
 
+### Explicit audio-source selection (unreleased)
+
+`snapshot.audio_source_options` provides conservative choices for supported
+models when the configured source is recognized: Audio Follows Video, observed
+HDMI inputs, analog audio in Insert mode on 350/360, and primary stream audio on
+350/360 receivers reporting receive streams. The E30 exposes Audio Follows Video
+and its observed HDMI input. Secondary stream audio and NAX source selection are
+deferred until their device-specific value mapping is validated.
+
+`await client.async_set_audio_source("Input1", expected_device_id=device_id)`
+posts only `AudioSource` and confirms its configured value. It never changes
+`ActiveAudioSource`, `NaxAudioSource`, analog mode, video source or routing state.
+Manual selection requires `AutoInputRoutingEnabled` to be explicitly false; a
+selection of the already configured source is a no-op. An uncertain outcome
+requires checking current state before retrying. Changing audio may interrupt
+sound or break audio-follows-video behavior. The available values are from the
+public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm);
+hardware write validation remains pending.
+
 `await client.async_get_preview_info()` detects optional preview capability.
 `await client.async_get_preview()` returns `NvxPreviewImage` (JPEG bytes and
 dimensions), or raises `NvxPreviewUnavailable` when no local image is available.
