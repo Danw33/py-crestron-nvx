@@ -5,6 +5,14 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Explicit LED-only control with strict boolean input, optional expected-device
+  identity verification, fresh preflight/readback and serialized endpoint I/O.
+- Typed control, unsupported/read-only and permission errors. Writes are never
+  automatically replayed; uncertain outcomes must be reconciled by reading.
+- Fixed nonempty partial payloads and bounded, relevant acknowledgement checks.
+
 ## [0.3.0]
 
 ### Fixed

@@ -1,4 +1,4 @@
-"""Async, read-only client for the publicly documented DM NVX HTTPS API."""
+"""Async monitoring and explicit LED control for the documented DM NVX API."""
 
 import asyncio
 import json
@@ -57,8 +57,20 @@ class NvxPreviewUnavailable(NvxApiError):
     """Preview is unsupported, disabled or has no current image."""
 
 
+class NvxControlError(NvxApiError):
+    """A command was rejected or its effect could not be confirmed."""
+
+
+class NvxControlUnsupported(NvxControlError):
+    """The endpoint does not expose the requested control."""
+
+
+class NvxPermissionError(NvxControlError):
+    """A write was refused; do not assume read credentials are invalid."""
+
+
 class NvxClient:
-    """Read-only client with a cookie store isolated per endpoint."""
+    """Client with explicit controls and a cookie store isolated per endpoint."""
 
     def __init__(
         self,
@@ -84,6 +96,79 @@ class NvxClient:
         """Return the endpoint web interface URL."""
 
         return str(self._base_url)
+
+    async def async_set_leds_enabled(
+        self, enabled: bool, *, expected_device_id: str | None = None
+    ) -> NvxSnapshot:
+        """Set only LEDs, once, and return observed state; never replay a POST.
+
+        A timeout, cancellation or failed readback can leave the outcome unknown.
+        The caller must reconcile by reading, not automatically repeat the write.
+        """
+        if type(enabled) is not bool:
+            raise ValueError("LED state must be a boolean")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            if before.leds_enabled is None:
+                raise NvxControlUnsupported("LED state is not available")
+            if before.leds_enabled is enabled:
+                return before
+            await self._async_post_leds(enabled)
+            # Only readbacks may be retried for a bounded propagation interval.
+            for attempt in range(3):
+                if attempt:
+                    await asyncio.sleep(0.25)
+                after = await self._async_get_snapshot()
+                if after.device.device_id != before.device.device_id:
+                    raise NvxControlError(
+                        "Endpoint identity changed during verification"
+                    )
+                if after.leds_enabled is enabled:
+                    return after
+            raise NvxControlError("LED change could not be verified; outcome uncertain")
+
+    async def _async_post_leds(self, enabled: bool) -> None:
+        """Send a fixed, nonempty partial object; never expose arbitrary writes."""
+        try:
+            async with self._session.post(
+                self._base_url.with_path("/Device"),
+                json={"Device": {"DeviceSpecific": {"LedsEnabled": enabled}}},
+                cookies=self._cookies,
+                headers={"Referer": str(self._base_url), "Origin": str(self._base_url)},
+                allow_redirects=False,
+                ssl=self._verify_ssl,
+                timeout=_REQUEST_TIMEOUT,
+            ) as response:
+                self._update_cookies(response)
+                if response.status in {401, 403}:
+                    # Read-only polling will independently determine whether
+                    # session renewal/reauthentication is actually required.
+                    raise NvxPermissionError("LED write refused")
+                if response.status != 200:
+                    raise NvxControlError(
+                        "Unexpected LED write response; outcome uncertain"
+                    )
+                payload = await _async_read_json(response, "/Device")
+        except (ClientError, TimeoutError) as err:
+            raise NvxConnectionError(
+                "LED write interrupted; outcome uncertain"
+            ) from err
+        except (TypeError, ValueError, RecursionError) as err:
+            raise NvxControlError(
+                "Invalid LED acknowledgement; outcome uncertain"
+            ) from err
+        _validate_led_result(payload)
 
     async def async_get_snapshot(self) -> NvxSnapshot:
         """Serialize status reads with preview reads and session renewal."""
@@ -338,6 +423,43 @@ class NvxClient:
             transmit_streams=_parse_streams(transmit_payload or {}, "transmit"),
             raw_device_specific=dict(specific),
         )
+
+
+def _validate_led_result(payload: object) -> None:
+    """Require relevant, explicit success and reject every reported failure."""
+    actions = payload.get("Actions") if isinstance(payload, dict) else None
+    if not isinstance(actions, list) or not actions or len(actions) > 64:
+        raise NvxControlError("Missing LED acknowledgement")
+    relevant = False
+    for action in actions:
+        if not isinstance(action, dict) or action.get("Operation") != "SetPartial":
+            raise NvxControlError("Unexpected LED acknowledgement")
+        results = action.get("Results")
+        if not isinstance(results, list) or not results or len(results) > 64:
+            raise NvxControlError("Missing LED result")
+        for result in results:
+            if not isinstance(result, dict):
+                raise NvxControlError("Invalid LED result")
+            status = result.get("StatusId")
+            path = result.get("Path")
+            prop = result.get("Property")
+            matches = (
+                path == "Device.DeviceSpecific" and prop in (None, "LedsEnabled")
+            ) or (
+                path == "Device.DeviceSpecific.LedsEnabled"
+                and prop in (None, "LedsEnabled")
+            )
+            if type(status) is not int or status != 0:
+                if matches and type(status) is int and status in {-2, 3}:
+                    raise NvxControlUnsupported(
+                        "LED control is read-only or unsupported"
+                    )
+                raise NvxControlError(
+                    "LED change rejected or requires additional action"
+                )
+            relevant |= matches
+    if not relevant:
+        raise NvxControlError("Acknowledgement does not confirm LED control")
 
 
 def _optional_string(value: object) -> str | None:

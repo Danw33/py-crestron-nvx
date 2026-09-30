@@ -35,10 +35,28 @@ fixture policy.
 
 ## Status
 
-Version 0.2 remains deliberately read-only. It authenticates over HTTPS and reads
+Published versions through 0.3.0 are read-only. The upcoming 0.4.0 release adds
+device control. The library authenticates over HTTPS and reads
 device identity, device-specific state, A/V I/O status, receive streams, and
 transmit streams. An allow-listed read method also supports safe exploration
-of documented objects such as Preview.
+of documented objects such as Stream Preview Images.
+
+### Explicit LED control (unreleased)
+
+`await client.async_set_leds_enabled(True, expected_device_id=device_id)` returns
+a fresh `NvxSnapshot` only after observing the requested state. Pass `False` to
+disable LEDs. The optional expected ID is checked against a fresh preflight
+read before any write. Only actual booleans are accepted. No writes occur from
+constructing a client, monitoring, probing or fetching previews.
+
+The method posts only `LedsEnabled`, checks the acknowledgement and performs
+bounded readback. It never replays a POST after a timeout, denial or uncertain
+result. An error or cancellation can still mean the device applied the change:
+inspect current state before explicitly retrying. Permission failures raise
+`NvxPermissionError`; unsupported/read-only controls raise `NvxControlUnsupported`;
+other command failures raise `NvxControlError` or existing transport/response
+errors. Read permission does not imply write access. No automatic reboot/reset
+or other control operation is implemented.
 
 `await client.async_get_preview_info()` detects optional preview capability.
 `await client.async_get_preview()` returns `NvxPreviewImage` (JPEG bytes and
@@ -69,8 +87,7 @@ reject other firmware versions, but versions outside this table are currently
 best-effort.
 
 A DM-NVX-350 on `1.3707.00028` also passed authentication and API-shape probing;
-its string-valued Preview response is treated as unsupported. HA and lifecycle
-testing on this firmware remain pending.
+its string-valued Preview response is treated as unsupported.
 
 ## Installation
 
