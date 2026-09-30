@@ -35,13 +35,13 @@ fixture policy.
 
 ## Status
 
-Published versions through 0.3.0 are read-only. The upcoming 0.4.0 release adds
+Versions through 0.3.0 are read-only. Version 0.4.0 adds
 device control. The library authenticates over HTTPS and reads
 device identity, device-specific state, A/V I/O status, receive streams, and
 transmit streams. An allow-listed read method also supports safe exploration
 of documented objects such as Stream Preview Images.
 
-### Explicit LED control (unreleased)
+### Explicit LED control
 
 `await client.async_set_leds_enabled(True, expected_device_id=device_id)` returns
 a fresh `NvxSnapshot` only after observing the requested state. Pass `False` to
@@ -58,7 +58,7 @@ other command failures raise `NvxControlError` or existing transport/response
 errors. Read permission does not imply write access. No automatic reboot/reset
 is implemented.
 
-### Explicit video-source selection (unreleased)
+### Explicit video-source selection
 
 `snapshot.video_source_options` returns conservative choices for DM-NVX-350,
 DM-NVX-360 and DM-NVX-E30 using model limits, reported HDMI slots and mode.
@@ -78,7 +78,7 @@ Changing video can interrupt viewing and affect audio that follows video.
 Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
 Per-device write support still requires supervised hardware validation.
 
-### Explicit reboot (unreleased)
+### Explicit reboot
 
 `await client.async_reboot(expected_device_id=device_id)` sends one
 `DeviceOperations.Reboot` request after a fresh identity check on a supported
@@ -92,7 +92,7 @@ The command is documented in Crestron's public
 [DeviceOperations API](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceOperations.htm).
 Live write validation is pending.
 
-### Explicit audio-source selection (unreleased)
+### Explicit audio-source selection
 
 `snapshot.audio_source_options` provides conservative choices for supported
 models when the configured source is recognized: Audio Follows Video, observed
@@ -124,12 +124,12 @@ logged. Preview display and updates have been validated through Home Assistant
 on a firmware 7.1 DM-NVX-360, including remote iOS viewing. Other models and
 physical outage/restart recovery remain to be validated.
 
-Published 0.3.0 remains read-only. Development writes include LEDs, video/audio
+Version 0.3.0 remains read-only. Version 0.4.0 writes include LEDs, video/audio
 source selection, explicit reboot and primary receiver stream URL routing.
 Primary stream start/stop commands are also implemented. Device mode writes are
 not exposed.
 
-### Primary receiver routing (unreleased)
+### Primary receiver routing
 
 `await client.async_set_receive_stream_location(location, expected_device_id=identity)`
 sets only `StreamReceive.Streams[0].StreamLocation` on a 350/360 in receiver mode.
@@ -154,7 +154,7 @@ Routing had been validated on a receiving 350 between transmitting 350 and E30
 devices in the standalone HA checkpoint. Monitoring compatibility does not imply
 that writes have been validated on every supported firmware.
 
-### Explicit primary stream commands (unreleased)
+### Explicit primary stream commands
 
 `await client.async_set_stream_running("receive", True, expected_device_id=identity)`
 sends a primary receive start command; use `False` to stop. `"transmit"` selects

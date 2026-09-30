@@ -5,6 +5,8 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
 - Explicit primary stream start/stop in the device's active direction. Commands
@@ -31,6 +33,13 @@ and uses semantic versioning.
 - Typed control, unsupported/read-only and permission errors. Writes are never
   automatically replayed; uncertain outcomes must be reconciled by reading.
 - Fixed nonempty partial payloads and bounded, relevant acknowledgement checks.
+
+### Validation
+
+- LED off/on and receiver routing have been exercised through the standalone HA
+  build. Routing was verified on a receiving 350 with 350 and E30 transmitters.
+- Live start/stop, reboot and successful video/audio source writes remain to be
+  validated. Source-selection guard errors do not count as successful writes.
 
 ## [0.3.0]
 
