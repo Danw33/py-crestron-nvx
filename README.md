@@ -126,7 +126,8 @@ physical outage/restart recovery remain to be validated.
 
 Published 0.3.0 remains read-only. Development writes include LEDs, video/audio
 source selection, explicit reboot and primary receiver stream URL routing.
-Device mode and stream start/stop writes are not exposed.
+Primary stream start/stop commands are also implemented. Device mode writes are
+not exposed.
 
 ### Primary receiver routing (unreleased)
 
@@ -149,8 +150,27 @@ replayed. After an uncertain failure, inspect the receiver before retrying.
 Public references: [StreamReceive](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/StreamReceive.htm),
 [StreamTransmit](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/StreamTransmit.htm),
 and [partial POST semantics](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Making-API-Calls.htm).
-Hardware routing validation is pending; monitoring compatibility does not imply
+Routing had been validated on a receiving 350 between transmitting 350 and E30
+devices in the standalone HA checkpoint. Monitoring compatibility does not imply
 that writes have been validated on every supported firmware.
+
+### Explicit primary stream commands (unreleased)
+
+`await client.async_set_stream_running("receive", True, expected_device_id=identity)`
+sends a primary receive start command; use `False` to stop. `"transmit"` selects
+the transmitter direction. Only the current device mode is eligible: 350/360
+receive or transmit, and E30 transmit. A primary list-backed slot with status
+and explicit non-busy `Processing` is required. Reception start also requires
+a valid configured RTSP URL. Transmitter stop can interrupt multiple receivers.
+
+The method posts only `Start: true` or `Stop: true` to slot 0 and checks up to
+five readbacks, with a 0.5-second delay between attempts, for non-busy reported
+`Stream started`/`Stream stopped` status (case-insensitive). HTTP requests retain
+their normal timeouts. It does not infer persistent state from command flags,
+skip a requested command based on potentially stale status, automatically replay
+a POST, or write any other property. Acknowledgement without matching status is
+an uncertain outcome, not success; playback itself is not verified. Hardware
+start/stop validation remains pending.
 
 The declared initial support scope is:
 

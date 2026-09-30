@@ -7,6 +7,9 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit primary stream start/stop in the device's active direction. Commands
+  use fresh identity/mode/busy checks, one narrow partial POST and bounded status
+  verification; no automatic replay, source changes or other-slot writes.
 - Explicit primary receiver stream routing for DM-NVX-350/360: a validated RTSP
   URL, fresh identity/mode/busy checks, one partial slot-0 write and verified
   readback. No credentials, other stream slots, source selections or start/stop

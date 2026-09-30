@@ -102,6 +102,36 @@ class NvxSnapshot:
     transmit_streams: tuple[NvxStream, ...] = ()
     raw_device_specific: dict[str, Any] = field(default_factory=dict)
 
+    def primary_control_stream(self, direction: str) -> NvxStream | None:
+        """Return an observed primary stream only in the matching device mode.
+
+        The inactive direction can expose stale/mirrored firmware data, so it
+        must never be used to enable a control. Dictionary slots are not guessed.
+        """
+        if direction == "receive":
+            models = {"DM-NVX-350", "DM-NVX-360"}
+            mode = "Receiver"
+            streams = self.receive_streams
+        elif direction == "transmit":
+            models = {"DM-NVX-350", "DM-NVX-360", "DM-NVX-E30"}
+            mode = "Transmitter"
+            streams = self.transmit_streams
+        else:
+            return None
+        if self.device.model.upper() not in models or self.device_mode != mode:
+            return None
+        return next(
+            (
+                stream
+                for stream in streams
+                if stream.slot_index == 0
+                and stream.direction == direction
+                and stream.processing is not None
+                and stream.status is not None
+            ),
+            None,
+        )
+
     @property
     def primary_receive_stream(self) -> NvxStream | None:
         """Return an explicitly addressable primary slot on supported receivers."""

@@ -286,6 +286,72 @@ class NvxClient:
                 "Stream route change could not be verified; outcome uncertain"
             )
 
+    async def async_set_stream_running(
+        self,
+        direction: Literal["receive", "transmit"],
+        running: bool,
+        *,
+        expected_device_id: str | None = None,
+    ) -> NvxSnapshot:
+        """Explicitly start or stop primary slot 0 in the active device direction.
+
+        Command flags are not persistent state. Send a single true command and
+        verify the reported Status, never replay or restore a desired state.
+        """
+        if direction not in ("receive", "transmit") or type(running) is not bool:
+            raise ValueError("Invalid stream direction or running value")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            stream = before.primary_control_stream(direction)
+            if stream is None or stream.processing is not False:
+                raise NvxControlUnsupported(
+                    "Primary stream is unavailable, busy or not in the active device direction"
+                )
+            if (
+                running
+                and direction == "receive"
+                and not is_valid_stream_location(stream.stream_location)
+            ):
+                raise NvxControlUnsupported(
+                    "Configure a valid primary RTSP stream URL before starting reception"
+                )
+            property_name: Literal["Start", "Stop"] = "Start" if running else "Stop"
+            object_name: Literal["StreamReceive", "StreamTransmit"] = (
+                "StreamReceive" if direction == "receive" else "StreamTransmit"
+            )
+            await self._async_post_control(property_name, True, object_name=object_name)
+            expected_status = "stream started" if running else "stream stopped"
+            for attempt in range(5):
+                if attempt:
+                    await asyncio.sleep(0.5)
+                after = await self._async_get_snapshot()
+                if after.device.device_id != before.device.device_id:
+                    raise NvxControlError(
+                        "Endpoint identity changed during verification"
+                    )
+                updated = after.primary_control_stream(direction)
+                if (
+                    updated is not None
+                    and updated.processing is False
+                    and updated.status is not None
+                    and updated.status.strip().casefold() == expected_status
+                ):
+                    return after
+            raise NvxControlError(
+                "Stream command could not be verified; outcome uncertain"
+            )
+
     async def async_reboot(self, *, expected_device_id: str | None = None) -> None:
         """Send one explicit reboot request after a fresh device identity check.
 
@@ -318,17 +384,23 @@ class NvxClient:
     async def _async_post_control(
         self,
         property_name: Literal[
-            "LedsEnabled", "VideoSource", "AudioSource", "Reboot", "StreamLocation"
+            "LedsEnabled",
+            "VideoSource",
+            "AudioSource",
+            "Reboot",
+            "StreamLocation",
+            "Start",
+            "Stop",
         ],
         value: bool | str,
         *,
         object_name: Literal[
-            "DeviceSpecific", "DeviceOperations", "StreamReceive"
+            "DeviceSpecific", "DeviceOperations", "StreamReceive", "StreamTransmit"
         ] = "DeviceSpecific",
     ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
         partial: dict[str, Any] = {property_name: value}
-        if object_name == "StreamReceive":
+        if object_name in {"StreamReceive", "StreamTransmit"}:
             partial = {"Streams": [partial]}
         try:
             async with self._session.post(
@@ -648,12 +720,14 @@ def _validate_control_result(
                 path == f"{object_path}.{property_name}"
                 and prop in (None, property_name)
             )
-            if object_name == "StreamReceive" and isinstance(path, str):
+            if object_name in {"StreamReceive", "StreamTransmit"} and isinstance(
+                path, str
+            ):
                 matches |= path in {
-                    "Device.StreamReceive.Streams.0",
-                    "Device.StreamReceive.Streams.0.StreamLocation",
-                    "Device.StreamReceive.Streams[0]",
-                    "Device.StreamReceive.Streams[0].StreamLocation",
+                    f"{object_path}.Streams.0",
+                    f"{object_path}.Streams.0.{property_name}",
+                    f"{object_path}.Streams[0]",
+                    f"{object_path}.Streams[0].{property_name}",
                 } and prop in (None, property_name)
             if type(status) is not int or status != 0:
                 if matches and type(status) is int and status in {-2, 3}:
