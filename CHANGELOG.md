@@ -7,6 +7,9 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit reboot operation using a fixed `DeviceOperations.Reboot` request,
+  fresh endpoint identity preflight, relevant acknowledgement checks and no
+  automatic retry or readback during the expected disconnect.
 - Explicit primary audio-source selection with model, mode and physical-input
   filters; analog input only in Insert mode and primary stream audio only on
   supported receivers. Writes use the same identity check, acknowledgement,

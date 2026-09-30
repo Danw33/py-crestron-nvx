@@ -236,16 +236,47 @@ class NvxClient:
                 "Audio source change could not be verified; outcome uncertain"
             )
 
+    async def async_reboot(self, *, expected_device_id: str | None = None) -> None:
+        """Send one explicit reboot request after a fresh device identity check.
+
+        The endpoint may disconnect before acknowledging the command. Never
+        retry automatically or expect a readback from a restarting device.
+        """
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            if before.device.model.upper() not in {
+                "DM-NVX-350",
+                "DM-NVX-360",
+                "DM-NVX-E30",
+            }:
+                raise NvxControlUnsupported("Reboot is not enabled for this model")
+            await self._async_post_control(
+                "Reboot", True, object_name="DeviceOperations"
+            )
+
     async def _async_post_control(
         self,
-        property_name: Literal["LedsEnabled", "VideoSource", "AudioSource"],
+        property_name: Literal["LedsEnabled", "VideoSource", "AudioSource", "Reboot"],
         value: bool | str,
+        *,
+        object_name: Literal["DeviceSpecific", "DeviceOperations"] = "DeviceSpecific",
     ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
         try:
             async with self._session.post(
                 self._base_url.with_path("/Device"),
-                json={"Device": {"DeviceSpecific": {property_name: value}}},
+                json={"Device": {object_name: {property_name: value}}},
                 cookies=self._cookies,
                 headers={"Referer": str(self._base_url), "Origin": str(self._base_url)},
                 allow_redirects=False,
@@ -270,7 +301,7 @@ class NvxClient:
             raise NvxControlError(
                 "Invalid control acknowledgement; outcome uncertain"
             ) from err
-        _validate_control_result(payload, property_name)
+        _validate_control_result(payload, property_name, object_name=object_name)
 
     async def async_get_snapshot(self) -> NvxSnapshot:
         """Serialize status reads with preview reads and session renewal."""
@@ -532,7 +563,12 @@ def _validate_led_result(payload: object) -> None:
     _validate_control_result(payload, "LedsEnabled")
 
 
-def _validate_control_result(payload: object, property_name: str) -> None:
+def _validate_control_result(
+    payload: object,
+    property_name: str,
+    *,
+    object_name: str = "DeviceSpecific",
+) -> None:
     """Require relevant, explicit success and reject every reported failure."""
     actions = payload.get("Actions") if isinstance(payload, dict) else None
     if not isinstance(actions, list) or not actions or len(actions) > 64:
@@ -550,10 +586,9 @@ def _validate_control_result(payload: object, property_name: str) -> None:
             status = result.get("StatusId")
             path = result.get("Path")
             prop = result.get("Property")
-            matches = (
-                path == "Device.DeviceSpecific" and prop in (None, property_name)
-            ) or (
-                path == f"Device.DeviceSpecific.{property_name}"
+            object_path = f"Device.{object_name}"
+            matches = (path == object_path and prop in (None, property_name)) or (
+                path == f"{object_path}.{property_name}"
                 and prop in (None, property_name)
             )
             if type(status) is not int or status != 0:

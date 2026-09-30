@@ -78,6 +78,20 @@ Changing video can interrupt viewing and affect audio that follows video.
 Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
 Per-device write support still requires supervised hardware validation.
 
+### Explicit reboot (unreleased)
+
+`await client.async_reboot(expected_device_id=device_id)` sends one
+`DeviceOperations.Reboot` request after a fresh identity check on a supported
+DM-NVX-350, DM-NVX-360 or DM-NVX-E30. The operation can interrupt video and
+audio until the device returns. A successful acknowledgement confirms only that
+the request was accepted, not that the restart completed. The connection may
+close before an acknowledgement; that outcome is uncertain. The client does not
+retry, poll for reboot completion, or send `Restore` or `Reset`.
+
+The command is documented in Crestron's public
+[DeviceOperations API](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceOperations.htm).
+Live write validation is pending.
+
 ### Explicit audio-source selection (unreleased)
 
 `snapshot.audio_source_options` provides conservative choices for supported
@@ -111,7 +125,7 @@ on a firmware 7.1 DM-NVX-360, including remote iOS viewing. Other models and
 physical outage/restart recovery remain to be validated.
 
 Published 0.3.0 remains read-only. Development writes are limited to LEDs and
-configured video source; no reboot, network-stream routing or mode writes exist.
+configured video source; network-stream routing and mode writes are not exposed.
 
 The declared initial support scope is:
 
