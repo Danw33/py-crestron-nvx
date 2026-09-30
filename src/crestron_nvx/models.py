@@ -123,3 +123,42 @@ class NvxSnapshot:
         if self.device_mode == "Receiver":
             choices.append("Stream")
         return tuple(choices)
+
+    @property
+    def audio_source_options(self) -> tuple[str, ...]:
+        """Offer documented primary audio sources for known endpoint topology."""
+        limits = {"DM-NVX-350": 2, "DM-NVX-360": 1, "DM-NVX-E30": 1}
+        model = self.device.model.upper()
+        limit = limits.get(model)
+        if (
+            limit is None
+            or self.audio_source
+            not in {
+                "AudioFollowsVideo",
+                "Input1",
+                "Input2",
+                "AnalogAudio",
+                "PrimaryStreamAudio",
+                "SecondaryStreamAudio",
+            }
+            or self.device_mode not in {"Transmitter", "Receiver"}
+            or (model == "DM-NVX-E30" and self.device_mode != "Transmitter")
+        ):
+            return ()
+        choices = ["AudioFollowsVideo"]
+        for index in range(limit):
+            if any(
+                port.direction == "input"
+                and port.port_id == f"input_slot{index}_hdmi_0"
+                for port in self.av_ports
+            ):
+                choices.append(f"Input{index + 1}")
+        if model != "DM-NVX-E30" and self.audio_mode == "Insert":
+            choices.append("AnalogAudio")
+        if (
+            model != "DM-NVX-E30"
+            and self.device_mode == "Receiver"
+            and self.receive_streams
+        ):
+            choices.append("PrimaryStreamAudio")
+        return tuple(choices) if self.audio_source in choices else ()

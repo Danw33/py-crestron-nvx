@@ -7,10 +7,14 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit primary audio-source selection with model, mode and physical-input
+  filters; analog input only in Insert mode and primary stream audio only on
+  supported receivers. Writes use the same identity check, acknowledgement,
+  bounded readback and no-replay behavior as video source control.
 - Explicit video-source selection with model/topology/mode-filtered options,
   identity checks, configured-state readback and no automatic write replay.
   Source changes require automatic input routing to be explicitly off; no
-  routing automation, audio, mode or stream addressing is changed.
+  routing automation, mode or stream addressing is changed.
 
 - Explicit LED-only control with strict boolean input, optional expected-device
   identity verification, fresh preflight/readback and serialized endpoint I/O.

@@ -188,8 +188,58 @@ class NvxClient:
                 "Video source change could not be verified; outcome uncertain"
             )
 
+    async def async_set_audio_source(
+        self, source: str, *, expected_device_id: str | None = None
+    ) -> NvxSnapshot:
+        """Select a supported primary audio source and verify configured state."""
+        if not isinstance(source, str) or source not in {
+            "AudioFollowsVideo",
+            "Input1",
+            "Input2",
+            "AnalogAudio",
+            "PrimaryStreamAudio",
+        }:
+            raise ValueError("Invalid audio source")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            if source not in before.audio_source_options:
+                raise NvxControlUnsupported("Audio source is not supported")
+            if before.audio_source == source:
+                return before
+            if before.auto_input_routing_enabled is not False:
+                raise NvxControlUnsupported(
+                    "Disable automatic input routing in the device web UI before selecting a source"
+                )
+            await self._async_post_control("AudioSource", source)
+            for attempt in range(3):
+                if attempt:
+                    await asyncio.sleep(0.25)
+                after = await self._async_get_snapshot()
+                if after.device.device_id != before.device.device_id:
+                    raise NvxControlError(
+                        "Endpoint identity changed during verification"
+                    )
+                if after.audio_source == source:
+                    return after
+            raise NvxControlError(
+                "Audio source change could not be verified; outcome uncertain"
+            )
+
     async def _async_post_control(
-        self, property_name: Literal["LedsEnabled", "VideoSource"], value: bool | str
+        self,
+        property_name: Literal["LedsEnabled", "VideoSource", "AudioSource"],
+        value: bool | str,
     ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
         try:
