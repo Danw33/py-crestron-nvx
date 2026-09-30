@@ -96,3 +96,30 @@ class NvxSnapshot:
     receive_streams: tuple[NvxStream, ...] = ()
     transmit_streams: tuple[NvxStream, ...] = ()
     raw_device_specific: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def video_source_options(self) -> tuple[str, ...]:
+        """Conservative choices for known hardware with observed HDMI topology."""
+        limits = {"DM-NVX-350": 2, "DM-NVX-360": 1, "DM-NVX-E30": 1}
+        limit = limits.get(self.device.model.upper())
+        if (
+            limit is None
+            or self.video_source not in {"None", "Input1", "Input2", "Stream"}
+            or self.device_mode not in {"Transmitter", "Receiver"}
+            or (
+                self.device.model.upper() == "DM-NVX-E30"
+                and self.device_mode != "Transmitter"
+            )
+        ):
+            return ()
+        choices = ["None"]
+        for index in range(limit):
+            if any(
+                port.direction == "input"
+                and port.port_id == f"input_slot{index}_hdmi_0"
+                for port in self.av_ports
+            ):
+                choices.append(f"Input{index + 1}")
+        if self.device_mode == "Receiver":
+            choices.append("Stream")
+        return tuple(choices)

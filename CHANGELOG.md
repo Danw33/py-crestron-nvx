@@ -7,6 +7,11 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit video-source selection with model/topology/mode-filtered options,
+  identity checks, configured-state readback and no automatic write replay.
+  Source changes require automatic input routing to be explicitly off; no
+  routing automation, audio, mode or stream addressing is changed.
+
 - Explicit LED-only control with strict boolean input, optional expected-device
   identity verification, fresh preflight/readback and serialized endpoint I/O.
 - Typed control, unsupported/read-only and permission errors. Writes are never

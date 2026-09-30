@@ -56,7 +56,27 @@ inspect current state before explicitly retrying. Permission failures raise
 `NvxPermissionError`; unsupported/read-only controls raise `NvxControlUnsupported`;
 other command failures raise `NvxControlError` or existing transport/response
 errors. Read permission does not imply write access. No automatic reboot/reset
-or other control operation is implemented.
+is implemented.
+
+### Explicit video-source selection (unreleased)
+
+`snapshot.video_source_options` returns conservative choices for DM-NVX-350,
+DM-NVX-360 and DM-NVX-E30 using model limits, reported HDMI slots and mode.
+Unknown hardware or missing/unknown source values expose no choices. `None`
+is the literal API string, not Python `None`. `Stream` is offered only in receiver
+mode; E30 never offers it. Ambiguous input topology is not guessed from labels.
+
+`await client.async_set_video_source("Input1", expected_device_id=device_id)`
+rechecks capabilities and identity before sending only `VideoSource`. It verifies
+the configured source, not signal availability or `ActiveVideoSource`. Changes
+require `AutoInputRoutingEnabled` to be explicitly false; use the device web UI
+to disable automatic input routing first. This method never changes that setting,
+stream URLs, device mode or audio source. Selecting the existing supported source
+is a no-op. As with LEDs, uncertain outcomes must be reconciled before retrying.
+Changing video can interrupt viewing and affect audio that follows video.
+
+Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
+Per-device write support still requires supervised hardware validation.
 
 `await client.async_get_preview_info()` detects optional preview capability.
 `await client.async_get_preview()` returns `NvxPreviewImage` (JPEG bytes and
@@ -71,8 +91,8 @@ logged. Preview display and updates have been validated through Home Assistant
 on a firmware 7.1 DM-NVX-360, including remote iOS viewing. Other models and
 physical outage/restart recovery remain to be validated.
 
-No reboot, routing, input, mode, stream, or configuration write can be issued
-by this release.
+Published 0.3.0 remains read-only. Development writes are limited to LEDs and
+configured video source; no reboot, network-stream routing or mode writes exist.
 
 The declared initial support scope is:
 

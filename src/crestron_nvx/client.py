@@ -1,4 +1,4 @@
-"""Async monitoring and explicit LED control for the documented DM NVX API."""
+"""Async monitoring and explicit controls for the documented DM NVX API."""
 
 import asyncio
 import json
@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from http.cookies import SimpleCookie
 from itertools import islice
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from yarl import URL
@@ -139,11 +139,63 @@ class NvxClient:
             raise NvxControlError("LED change could not be verified; outcome uncertain")
 
     async def _async_post_leds(self, enabled: bool) -> None:
+        await self._async_post_control("LedsEnabled", enabled)
+
+    async def async_set_video_source(
+        self, source: str, *, expected_device_id: str | None = None
+    ) -> NvxSnapshot:
+        """Select a supported configured source; never alter automatic routing."""
+        if not isinstance(source, str) or source not in {
+            "None",
+            "Input1",
+            "Input2",
+            "Stream",
+        }:
+            raise ValueError("Invalid video source")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            if source not in before.video_source_options:
+                raise NvxControlUnsupported("Video source is not supported")
+            if before.video_source == source:
+                return before
+            if before.auto_input_routing_enabled is not False:
+                raise NvxControlUnsupported(
+                    "Disable automatic input routing in the device web UI before selecting a source"
+                )
+            await self._async_post_control("VideoSource", source)
+            for attempt in range(3):
+                if attempt:
+                    await asyncio.sleep(0.25)
+                after = await self._async_get_snapshot()
+                if after.device.device_id != before.device.device_id:
+                    raise NvxControlError(
+                        "Endpoint identity changed during verification"
+                    )
+                if after.video_source == source:
+                    return after
+            raise NvxControlError(
+                "Video source change could not be verified; outcome uncertain"
+            )
+
+    async def _async_post_control(
+        self, property_name: Literal["LedsEnabled", "VideoSource"], value: bool | str
+    ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
         try:
             async with self._session.post(
                 self._base_url.with_path("/Device"),
-                json={"Device": {"DeviceSpecific": {"LedsEnabled": enabled}}},
+                json={"Device": {"DeviceSpecific": {property_name: value}}},
                 cookies=self._cookies,
                 headers={"Referer": str(self._base_url), "Origin": str(self._base_url)},
                 allow_redirects=False,
@@ -154,21 +206,21 @@ class NvxClient:
                 if response.status in {401, 403}:
                     # Read-only polling will independently determine whether
                     # session renewal/reauthentication is actually required.
-                    raise NvxPermissionError("LED write refused")
+                    raise NvxPermissionError("Control write refused")
                 if response.status != 200:
                     raise NvxControlError(
-                        "Unexpected LED write response; outcome uncertain"
+                        "Unexpected control write response; outcome uncertain"
                     )
                 payload = await _async_read_json(response, "/Device")
         except (ClientError, TimeoutError) as err:
             raise NvxConnectionError(
-                "LED write interrupted; outcome uncertain"
+                "Control write interrupted; outcome uncertain"
             ) from err
         except (TypeError, ValueError, RecursionError) as err:
             raise NvxControlError(
-                "Invalid LED acknowledgement; outcome uncertain"
+                "Invalid control acknowledgement; outcome uncertain"
             ) from err
-        _validate_led_result(payload)
+        _validate_control_result(payload, property_name)
 
     async def async_get_snapshot(self) -> NvxSnapshot:
         """Serialize status reads with preview reads and session renewal."""
@@ -426,40 +478,43 @@ class NvxClient:
 
 
 def _validate_led_result(payload: object) -> None:
+    """Validate the LED response using the shared acknowledgement parser."""
+    _validate_control_result(payload, "LedsEnabled")
+
+
+def _validate_control_result(payload: object, property_name: str) -> None:
     """Require relevant, explicit success and reject every reported failure."""
     actions = payload.get("Actions") if isinstance(payload, dict) else None
     if not isinstance(actions, list) or not actions or len(actions) > 64:
-        raise NvxControlError("Missing LED acknowledgement")
+        raise NvxControlError("Missing control acknowledgement")
     relevant = False
     for action in actions:
         if not isinstance(action, dict) or action.get("Operation") != "SetPartial":
-            raise NvxControlError("Unexpected LED acknowledgement")
+            raise NvxControlError("Unexpected control acknowledgement")
         results = action.get("Results")
         if not isinstance(results, list) or not results or len(results) > 64:
-            raise NvxControlError("Missing LED result")
+            raise NvxControlError("Missing control result")
         for result in results:
             if not isinstance(result, dict):
-                raise NvxControlError("Invalid LED result")
+                raise NvxControlError("Invalid control result")
             status = result.get("StatusId")
             path = result.get("Path")
             prop = result.get("Property")
             matches = (
-                path == "Device.DeviceSpecific" and prop in (None, "LedsEnabled")
+                path == "Device.DeviceSpecific" and prop in (None, property_name)
             ) or (
-                path == "Device.DeviceSpecific.LedsEnabled"
-                and prop in (None, "LedsEnabled")
+                path == f"Device.DeviceSpecific.{property_name}"
+                and prop in (None, property_name)
             )
             if type(status) is not int or status != 0:
                 if matches and type(status) is int and status in {-2, 3}:
-                    raise NvxControlUnsupported(
-                        "LED control is read-only or unsupported"
-                    )
+                    raise NvxControlUnsupported("Control is read-only or unsupported")
                 raise NvxControlError(
-                    "LED change rejected or requires additional action"
+                    "Control change rejected or requires additional action"
                 )
             relevant |= matches
     if not relevant:
-        raise NvxControlError("Acknowledgement does not confirm LED control")
+        raise NvxControlError("Acknowledgement does not confirm requested control")
 
 
 def _optional_string(value: object) -> str | None:
