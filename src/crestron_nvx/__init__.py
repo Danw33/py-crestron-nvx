@@ -14,6 +14,7 @@ from .client import (
     NvxResponseError,
 )
 from .clock import NvxClockInfo
+from .display import NvxDisplayCommand
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
 from .preview import NvxPreviewImage, NvxPreviewInfo
 from .routing import is_valid_stream_location
@@ -29,6 +30,7 @@ __all__ = [
     "NvxControlError",
     "NvxControlUnsupported",
     "NvxDeviceInfo",
+    "NvxDisplayCommand",
     "NvxPermissionError",
     "NvxPreviewImage",
     "NvxPreviewInfo",

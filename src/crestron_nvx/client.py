@@ -15,6 +15,12 @@ from yarl import URL
 
 from .capabilities import NvxCapabilities
 from .clock import NvxClockInfo, parse_clock
+from .display import (
+    DISPLAY_ACTIONS,
+    NvxDisplayCommand,
+    parse_display_commands,
+    valid_output_id,
+)
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
 from .preview import NvxPreviewImage, NvxPreviewInfo, jpeg_dimensions, parse_preview
 from .routing import is_valid_stream_location
@@ -39,6 +45,7 @@ class NvxReadPath(StrEnum):
     STREAM_TRANSMIT = "/Device/StreamTransmit"
     PREVIEW = "/Device/Preview"
     SYSTEM_CLOCK = "/Device/SystemClock"
+    CUSTOM_CONTROL_PORT_COMMANDS = "/Device/CustomControlPortCommands"
 
 
 class NvxApiError(Exception):
@@ -419,6 +426,80 @@ class NvxClient:
                 "ForceSynchronizationNow", True, object_name="SystemClock"
             )
 
+    async def async_get_display_commands(self) -> tuple[NvxDisplayCommand, ...]:
+        """Read eligible configured commands; never send them during discovery."""
+        async with self._io_lock:
+            return await self._async_get_display_commands()
+
+    async def _async_get_display_commands(self) -> tuple[NvxDisplayCommand, ...]:
+        try:
+            payload = await self._async_get_read_only_object(
+                NvxReadPath.CUSTOM_CONTROL_PORT_COMMANDS
+            )
+        except NvxResponseError:
+            return ()
+        return parse_display_commands(payload)
+
+    async def async_send_display_command(
+        self, output_id: str, action: str, *, expected_device_id: str | None = None
+    ) -> None:
+        """Invoke an existing command once; never configure ports or infer TV state."""
+        if (
+            not valid_output_id(output_id)
+            or not isinstance(action, str)
+            or action not in DISPLAY_ACTIONS
+        ):
+            raise ValueError("Invalid display output or action")
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            snapshot = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and snapshot.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            if not snapshot.capabilities.is_nvx:
+                raise NvxControlUnsupported(
+                    "Display commands require a DM NVX endpoint"
+                )
+            commands = await self._async_get_display_commands()
+            command = next(
+                (
+                    item
+                    for item in commands
+                    if item.output_id == output_id and item.action == action
+                ),
+                None,
+            )
+            if command is None:
+                raise NvxControlUnsupported(
+                    "Display command is not configured or enabled"
+                )
+            path = (
+                command.interface,
+                "PortList",
+                command.port_id,
+                "CommandList",
+                action,
+            )
+            partial: dict[str, Any] = {"Test": True}
+            for key in reversed(path):
+                partial = {key: partial}
+            payload = await self._async_post_partial(
+                "CustomControlPortCommands", partial
+            )
+            _validate_control_result(
+                payload,
+                "Test",
+                object_name="CustomControlPortCommands",
+                nested_path=path,
+            )
+
     async def _async_post_control(
         self,
         property_name: Literal[
@@ -447,6 +528,13 @@ class NvxClient:
             partial = {"Ntp": partial}
         if object_name in {"StreamReceive", "StreamTransmit"}:
             partial = {"Streams": [partial]}
+        payload = await self._async_post_partial(object_name, partial)
+        _validate_control_result(payload, property_name, object_name=object_name)
+
+    async def _async_post_partial(
+        self, object_name: str, partial: dict[str, Any]
+    ) -> Any:
+        """Shared private transport for narrowly constructed control payloads."""
         try:
             async with self._session.post(
                 self._base_url.with_path("/Device"),
@@ -475,7 +563,7 @@ class NvxClient:
             raise NvxControlError(
                 "Invalid control acknowledgement; outcome uncertain"
             ) from err
-        _validate_control_result(payload, property_name, object_name=object_name)
+        return payload
 
     async def async_get_snapshot(self) -> NvxSnapshot:
         """Serialize status reads with preview reads and session renewal."""
@@ -742,6 +830,7 @@ def _validate_control_result(
     property_name: str,
     *,
     object_name: str = "DeviceSpecific",
+    nested_path: tuple[str, ...] = (),
 ) -> None:
     """Require relevant, explicit success and reject every reported failure."""
     actions = payload.get("Actions") if isinstance(payload, dict) else None
@@ -767,6 +856,15 @@ def _validate_control_result(
                 path == f"{object_path}.{property_name}"
                 and prop in (None, property_name)
             )
+            if nested_path:
+                # Only ancestors of the one written leaf can acknowledge it.
+                parts = (object_name, *nested_path, property_name)
+                matches = any(
+                    path == "Device." + ".".join(parts[:index])
+                    and prop
+                    in (None, parts[index] if index < len(parts) else property_name)
+                    for index in range(1, len(parts) + 1)
+                )
             if object_name == "SystemClock":
                 matches |= path == "Device.SystemClock" and prop in (None, "Ntp")
             if object_name in {"StreamReceive", "StreamTransmit"} and isinstance(

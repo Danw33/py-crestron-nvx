@@ -7,6 +7,11 @@ and uses semantic versioning.
 
 ### Added
 
+- Configured output display commands for CEC, Serial and Infrared: Power On,
+  Power Off and enabled Input Control. Fresh identity/mapping checks, minimal
+  Test-only writes and acknowledgement validation without retries or TV state
+  inference. Optional discovery retains no command strings.
+
 - Optional, privacy-minimised NTP capability reads and explicit clock sync using
   existing configured servers. Fresh identity/schema/readiness checks and one
   fixed partial write; no automatic retry or claim of successful synchronisation.

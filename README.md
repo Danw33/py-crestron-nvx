@@ -106,6 +106,36 @@ Changing video can interrupt viewing and affect audio that follows video.
 Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
 Per-device write support still requires supervised hardware validation.
 
+### Configured display commands (unreleased)
+
+`await client.async_get_display_commands()` returns immutable
+`NvxDisplayCommand` entries (output, action, interface and port), not the
+underlying command strings. These can be passed to
+`NvxCapabilities.from_snapshot(snapshot, display_commands=commands)` for
+the shared capability view. Discovery is read-only and optional.
+
+`await client.async_send_display_command("Output1", "PowerOn", expected_device_id=device_id)`
+invokes the configured command once. Supported actions are `PowerOn`,
+`PowerOff` and `InputControl`; interfaces are Cec, Serial and Infrared.
+The client freshly checks identity and resolves the output's currently configured
+port, then writes only that command's `Test: true` flag.
+
+Eligibility requires object version 2.0.2+, an enabled supported output
+association, supported port/action, nonempty command data and a recognised
+encoding/type. InputControl additionally requires its enable flag. Missing,
+unknown and empty template data fail closed. No exact-model allowlist is used.
+Some older schemas may therefore need further validation before being eligible.
+
+No command data, associations, automatic-power settings, timeouts, serial
+settings or IR files are changed. An acknowledgement means accepted, not that
+the TV powered on/off or changed input. There is no automatic replay or device
+state inference. Check the display before retrying uncertain outcomes.
+Shared control ports can affect more than one output; existing automatic-power
+behaviour may subsequently override an explicit command. Hardware validation
+is pending for all three interfaces.
+
+Public reference: [CustomControlPortCommands](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/AutoPowerConfig.htm).
+
 ### Explicit NTP sync (unreleased)
 
 `await client.async_get_clock_info()` returns minimal `NvxClockInfo` metadata,
