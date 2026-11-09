@@ -5,6 +5,13 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Optional, privacy-minimised NTP capability reads and explicit clock sync using
+  existing configured servers. Fresh identity/schema/readiness checks and one
+  fixed partial write; no automatic retry or claim of successful synchronisation.
+  Deprecated Sntp-only firmware is not offered a speculative command.
+
 ### Changed
 
 - Centralise observed control support in the immutable `NvxCapabilities` view,

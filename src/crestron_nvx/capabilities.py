@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .clock import NvxClockInfo
+
 if TYPE_CHECKING:
     from .models import NvxSnapshot, NvxStream
 
@@ -32,6 +34,7 @@ class NvxCapabilities:
     is_nvx: bool = False
     leds_control: bool = False
     reboot: bool = False
+    ntp_sync: bool = False
     video_source_options: tuple[str, ...] = ()
     audio_source_options: tuple[str, ...] = ()
     receive_routing_stream: NvxStream | None = None
@@ -39,7 +42,9 @@ class NvxCapabilities:
     transmit_control_stream: NvxStream | None = None
 
     @classmethod
-    def from_snapshot(cls, snapshot: NvxSnapshot) -> NvxCapabilities:
+    def from_snapshot(
+        cls, snapshot: NvxSnapshot, *, clock_info: NvxClockInfo | None = None
+    ) -> NvxCapabilities:
         """Use reported mode and topology; never guess ports from model names."""
         if not is_nvx_model(snapshot.device.model):
             return cls()
@@ -88,6 +93,7 @@ class NvxCapabilities:
             is_nvx=True,
             leds_control=snapshot.leds_enabled is not None,
             reboot=True,
+            ntp_sync=clock_info is not None and clock_info.sync_supported,
             video_source_options=video,
             audio_source_options=audio,
             receive_routing_stream=(

@@ -106,6 +106,29 @@ Changing video can interrupt viewing and affect audio that follows video.
 Values come from the public [DeviceSpecific reference](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/DeviceSpecific.htm).
 Per-device write support still requires supervised hardware validation.
 
+### Explicit NTP sync (unreleased)
+
+`await client.async_get_clock_info()` returns minimal `NvxClockInfo` metadata,
+without retaining server addresses, authentication keys or raw clock settings.
+Pass it to `NvxCapabilities.from_snapshot(snapshot, clock_info=info)` for the
+shared `ntp_sync` support flag; `info.can_sync` describes current readiness.
+This optional read is separate from the core monitoring snapshot.
+
+`await client.async_sync_clock(expected_device_id=device_id)` checks fresh
+identity and clock configuration, then sends only
+`SystemClock.Ntp.ForceSynchronizationNow: true`. It requires the documented
+Ntp schema (SystemClock object version 2.1.0 or newer), enabled NTP and a
+nonempty configured server address. Deprecated Sntp-only devices fail closed.
+Firmware versions are not used as a substitute for the object schema.
+
+No server list, key, timezone, current time or enablement setting is written.
+Acknowledgement means the request was accepted, not that the clock has synced.
+There is no automatic write retry or sync-completion readback. A timeout or
+cancellation can leave an uncertain outcome: inspect the device before retrying.
+Hardware validation is pending.
+
+Public reference: [SystemClock](https://sdkcon78221.crestron.com/sdk/DM_NVX_REST_API/Content/Topics/Objects/SystemClock.htm).
+
 ### Explicit reboot
 
 `await client.async_reboot(expected_device_id=device_id)` sends one

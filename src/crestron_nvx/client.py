@@ -13,6 +13,8 @@ from typing import Any, Final, Literal
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from yarl import URL
 
+from .capabilities import NvxCapabilities
+from .clock import NvxClockInfo, parse_clock
 from .models import NvxAvPort, NvxDeviceInfo, NvxSnapshot, NvxStream
 from .preview import NvxPreviewImage, NvxPreviewInfo, jpeg_dimensions, parse_preview
 from .routing import is_valid_stream_location
@@ -36,6 +38,7 @@ class NvxReadPath(StrEnum):
     STREAM_RECEIVE = "/Device/StreamReceive"
     STREAM_TRANSMIT = "/Device/StreamTransmit"
     PREVIEW = "/Device/Preview"
+    SYSTEM_CLOCK = "/Device/SystemClock"
 
 
 class NvxApiError(Exception):
@@ -377,6 +380,45 @@ class NvxClient:
                 "Reboot", True, object_name="DeviceOperations"
             )
 
+    async def async_get_clock_info(self) -> NvxClockInfo:
+        """Read optional clock capabilities without storing sensitive settings."""
+        async with self._io_lock:
+            return await self._async_get_clock_info()
+
+    async def _async_get_clock_info(self) -> NvxClockInfo:
+        try:
+            payload = await self._async_get_read_only_object(NvxReadPath.SYSTEM_CLOCK)
+        except NvxResponseError:
+            return NvxClockInfo()
+        return parse_clock(payload)
+
+    async def async_sync_clock(self, *, expected_device_id: str | None = None) -> None:
+        """Request one NTP sync; acknowledgement does not establish time accuracy."""
+        if expected_device_id is not None and (
+            not isinstance(expected_device_id, str) or not expected_device_id.strip()
+        ):
+            raise ValueError("Expected device identity must be a nonempty string")
+        async with self._io_lock:
+            before = await self._async_get_snapshot()
+            if (
+                expected_device_id is not None
+                and before.device.device_id != expected_device_id
+            ):
+                raise NvxControlError(
+                    "Endpoint identity does not match; no command sent"
+                )
+            clock = await self._async_get_clock_info()
+            if (
+                not NvxCapabilities.from_snapshot(before, clock_info=clock).ntp_sync
+                or not clock.can_sync
+            ):
+                raise NvxControlUnsupported(
+                    "NTP sync requires supported, enabled NTP with a configured server"
+                )
+            await self._async_post_control(
+                "ForceSynchronizationNow", True, object_name="SystemClock"
+            )
+
     async def _async_post_control(
         self,
         property_name: Literal[
@@ -387,15 +429,22 @@ class NvxClient:
             "StreamLocation",
             "Start",
             "Stop",
+            "ForceSynchronizationNow",
         ],
         value: bool | str,
         *,
         object_name: Literal[
-            "DeviceSpecific", "DeviceOperations", "StreamReceive", "StreamTransmit"
+            "DeviceSpecific",
+            "DeviceOperations",
+            "StreamReceive",
+            "StreamTransmit",
+            "SystemClock",
         ] = "DeviceSpecific",
     ) -> None:
         """Send a fixed, nonempty partial object; never expose arbitrary writes."""
         partial: dict[str, Any] = {property_name: value}
+        if object_name == "SystemClock":
+            partial = {"Ntp": partial}
         if object_name in {"StreamReceive", "StreamTransmit"}:
             partial = {"Streams": [partial]}
         try:
@@ -712,10 +761,14 @@ def _validate_control_result(
             path = result.get("Path")
             prop = result.get("Property")
             object_path = f"Device.{object_name}"
+            if object_name == "SystemClock":
+                object_path += ".Ntp"
             matches = (path == object_path and prop in (None, property_name)) or (
                 path == f"{object_path}.{property_name}"
                 and prop in (None, property_name)
             )
+            if object_name == "SystemClock":
+                matches |= path == "Device.SystemClock" and prop in (None, "Ntp")
             if object_name in {"StreamReceive", "StreamTransmit"} and isinstance(
                 path, str
             ):
